@@ -20,7 +20,7 @@ export function HealthTicker({ ticker }: { ticker: CustomerHealthTicker }) {
   return (
     <section
       aria-label="Customer health ticker"
-      className="-mx-8 flex items-stretch border-y border-line bg-panel-strong lg:-mx-12"
+      className="health-ticker -mx-8 flex items-stretch border-y border-line bg-panel-strong lg:-mx-12"
     >
       <div className="flex flex-none items-center gap-3 bg-signal px-6 text-background">
         <span className="font-display text-xl font-bold uppercase tracking-[0.2em]">

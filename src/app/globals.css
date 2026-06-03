@@ -76,6 +76,11 @@ input {
   will-change: transform;
 }
 
+/* Pause the scroll while the mouse is over the ticker (e.g. to read a client). */
+.health-ticker:hover .animate-ticker {
+  animation-play-state: paused;
+}
+
 ::selection {
   background: var(--signal);
   color: var(--background);

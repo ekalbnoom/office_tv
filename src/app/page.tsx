@@ -8,9 +8,12 @@ import {
 import { connection } from "next/server";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { HealthTicker } from "@/components/health-ticker";
+import { JamLive } from "@/components/jam-live";
 import { MediaBar } from "@/components/media-bar";
+import { NowPlayingChip } from "@/components/now-playing-chip";
 import { SpotifyPlayer } from "@/components/spotify-player";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { TimeSavedEquivalents } from "@/components/time-saved-equivalents";
 import { formatMoney, formatTime } from "@/lib/format";
 import { getCustomerHealthTicker } from "@/lib/customer-health";
 import { getDashboardMetrics } from "@/lib/dashboard-metrics";
@@ -42,13 +45,22 @@ export default async function Home() {
 
   return (
     <main className="min-h-screen overflow-hidden bg-background text-foreground">
-      <section className="mx-auto flex min-h-screen w-full max-w-[1800px] flex-col px-8 py-7 lg:px-12">
+      <section className="relative mx-auto flex min-h-screen w-full max-w-[1800px] flex-col px-8 py-7 lg:px-12">
+        {/* Jam QR floats top-right; only rendered when a jam is live (hideWhenEmpty),
+            and absolutely positioned so it never shifts the grid below it. */}
+        <div className="absolute right-8 top-24 z-20 lg:right-12">
+          <JamLive initialQrDataUrl={jamQrDataUrl} hideWhenEmpty />
+        </div>
+
         <header className="flex flex-col gap-4 border-b border-line pb-5 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="sr-only">Revenue wallboard</h1>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-signal">
-              Internal wallboard
-            </p>
+          <div className="flex items-center gap-4">
+            <div>
+              <h1 className="sr-only">Revenue wallboard</h1>
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-signal">
+                Internal wallboard
+              </p>
+            </div>
+            <NowPlayingChip initial={nowPlaying} configured={isSpotifyConfigured()} />
           </div>
           <div className="flex flex-wrap items-center gap-3 text-sm text-muted">
             <span className="rounded-full border border-line px-4 py-2">
@@ -105,6 +117,11 @@ export default async function Home() {
             />
           </section>
 
+          <TimeSavedEquivalents
+            timeSavedLabel={metrics.totalTimeSaved}
+            collectedCents={metrics.totalCollectedCents}
+          />
+
           <HealthTicker ticker={healthTicker} />
 
           <LokiLogCard logs={metrics.logs} />
@@ -113,7 +130,6 @@ export default async function Home() {
             <h2 className="sr-only">Audio and Jam</h2>
             <MediaBar
               nowPlaying={nowPlaying}
-              jamQrDataUrl={jamQrDataUrl}
               spotifyConfigured={isSpotifyConfigured()}
             />
             {/* Mounted once here (outside the MediaBar source swap) so the

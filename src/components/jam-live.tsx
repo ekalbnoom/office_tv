@@ -7,7 +7,13 @@ const POLL_MS = 10_000;
 
 // Polls the current Jam QR so a newly-posted #office-jams link or a "clear jam"
 // is reflected within ~10s, independent of the 60s full-page refresh.
-export function JamLive({ initialQrDataUrl }: { initialQrDataUrl: string | null }) {
+export function JamLive({
+  initialQrDataUrl,
+  hideWhenEmpty = false,
+}: {
+  initialQrDataUrl: string | null;
+  hideWhenEmpty?: boolean;
+}) {
   const [qrDataUrl, setQrDataUrl] = useState(initialQrDataUrl);
 
   useEffect(() => {
@@ -52,6 +58,10 @@ export function JamLive({ initialQrDataUrl }: { initialQrDataUrl: string | null 
       </div>
     );
   }
+
+  // No active jam: render nothing where the caller wants the slot to disappear
+  // entirely (e.g. the floating top-right QR), otherwise show the hint.
+  if (hideWhenEmpty) return null;
 
   return (
     <div className="flex flex-none items-center gap-2 rounded-2xl border border-line bg-panel px-4 py-3 text-muted lg:w-72">
