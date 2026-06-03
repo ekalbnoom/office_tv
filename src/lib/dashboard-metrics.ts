@@ -1,11 +1,13 @@
 import { getSupabaseCollectionMetrics } from "@/lib/supabase-metrics";
 import { formatTimeSaved } from "@/lib/time-saved";
+import { getLokiLogs, type LokiLogs } from "@/lib/loki-logs";
 
 export type DashboardMetrics = {
   collectionScopeLabel: string;
   currency: string;
   errors: string[];
   generatedAt: string;
+  logs: LokiLogs;
   monthLabel: string;
   monthlyCollectedCents: number;
   totalTimeSaved: string;
@@ -17,13 +19,17 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
   const generatedAt = new Date();
   const monthStart = getMonthStart(generatedAt);
 
-  const collections = await getSupabaseCollectionMetrics(generatedAt, monthStart);
+  const [collections, logs] = await Promise.all([
+    getSupabaseCollectionMetrics(generatedAt, monthStart),
+    getLokiLogs(),
+  ]);
 
   return {
     collectionScopeLabel: collections.scopeLabel,
     currency,
-    errors: [collections.error].filter(Boolean),
+    errors: [collections.error, logs.error].filter(Boolean),
     generatedAt: generatedAt.toISOString(),
+    logs,
     monthLabel: new Intl.DateTimeFormat("en-US", {
       month: "long",
       year: "numeric",

@@ -1,5 +1,10 @@
 import QRCode from "qrcode";
-import { AlertTriangle, CircleDollarSign, Clock, TrendingUp } from "lucide-react";
+import {
+  AlertTriangle,
+  CircleDollarSign,
+  Clock,
+  TrendingUp,
+} from "lucide-react";
 import { connection } from "next/server";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { HealthTicker } from "@/components/health-ticker";
@@ -11,6 +16,7 @@ import { getCustomerHealthTicker } from "@/lib/customer-health";
 import { getDashboardMetrics } from "@/lib/dashboard-metrics";
 import { getLatestJamLink } from "@/lib/slack-jam";
 import { getNowPlaying, isSpotifyConfigured } from "@/lib/spotify";
+import { LokiLogCard } from "@/components/loki-log-card";
 
 export const revalidate = 0;
 
@@ -72,8 +78,8 @@ export default async function Home() {
         ) : null}
 
         <div className="flex flex-1 flex-col gap-6 py-7">
-          <section className="flex min-w-0 flex-1 flex-col gap-5">
-            <MetricRow
+          <section className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+            <MetricCard
               eyebrow="All time"
               label="Net collected"
               value={formatMoney(metrics.totalCollectedCents, metrics.currency)}
@@ -81,7 +87,7 @@ export default async function Home() {
               icon={<CircleDollarSign className="h-8 w-8" aria-hidden />}
               tone="signal"
             />
-            <MetricRow
+            <MetricCard
               eyebrow="This month"
               label="Net collected"
               value={formatMoney(metrics.monthlyCollectedCents, metrics.currency)}
@@ -89,7 +95,7 @@ export default async function Home() {
               icon={<TrendingUp className="h-8 w-8" aria-hidden />}
               tone="warning"
             />
-            <MetricRow
+            <MetricCard
               eyebrow="All time"
               label="Time saved"
               value={metrics.totalTimeSaved}
@@ -100,6 +106,8 @@ export default async function Home() {
           </section>
 
           <HealthTicker ticker={healthTicker} />
+
+          <LokiLogCard logs={metrics.logs} />
 
           <section className="border-t border-line pt-5">
             <h2 className="sr-only">Audio and Jam</h2>
@@ -120,7 +128,7 @@ export default async function Home() {
   );
 }
 
-function MetricRow({
+function MetricCard({
   eyebrow,
   label,
   value,
@@ -145,30 +153,30 @@ function MetricRow({
   return (
     <article className="grid min-h-[172px] min-w-0 gap-5 border border-line bg-panel p-6 md:grid-cols-[220px_minmax(0,1fr)] 2xl:min-h-[190px]">
       <div className="flex min-w-0 flex-col justify-between gap-5">
-        <div className="flex items-start justify-between gap-4 md:block">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-muted">
-              {eyebrow}
-            </p>
-            <h2 className="mt-2 font-display text-4xl font-semibold uppercase leading-none">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-muted">
+            {eyebrow}
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <h2 className="font-display text-3xl font-semibold uppercase leading-none">
               {label}
             </h2>
+            <div className={`${toneClass} flex-none`}>{icon}</div>
           </div>
-          <div className={`${toneClass} md:mt-5`}>{icon}</div>
         </div>
-        <p className="border-t border-line pt-4 text-base font-medium text-muted">
+        <p className="border-t border-line pt-4 text-sm text-muted">
           {detail}
         </p>
       </div>
-
       <div className="flex min-w-0 items-end justify-end">
         <p
-          className={`w-full overflow-hidden whitespace-nowrap text-right font-display text-6xl font-bold leading-none tracking-normal tabular-nums sm:text-7xl 2xl:text-8xl ${toneClass}`}
+          className={`w-full overflow-hidden whitespace-nowrap text-right font-display font-bold leading-none tracking-normal tabular-nums text-xl sm:text-3xl 2xl:text-4xl ${toneClass}`}
           title={value}
         >
           {value}
         </p>
       </div>
+
     </article>
   );
 }
