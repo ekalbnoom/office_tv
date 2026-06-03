@@ -23,6 +23,7 @@ export interface CustomerHealthRow {
   account_health_status?: string | null;
   customers: {
     name: string;
+    status?: string | null;
     commission_monthly_value: number | null;
     usage_monthly_value: number | null;
     saas_monthly_value: number | null;

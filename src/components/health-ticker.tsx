@@ -1,25 +1,8 @@
 import { TrendingDown, TrendingUp } from "lucide-react";
 import type { CustomerHealthTicker, HealthTickerEntry } from "@/lib/customer-health";
 
-type TickerItem = HealthTickerEntry & { direction: "up" | "down" };
-
-// Interleave the healthiest and at-risk lists so the ribbon alternates green
-// and red as it scrolls, the way a stock ticker mixes gainers and losers.
-function interleave(up: TickerItem[], down: TickerItem[]): TickerItem[] {
-  const out: TickerItem[] = [];
-  const max = Math.max(up.length, down.length);
-  for (let i = 0; i < max; i++) {
-    if (up[i]) out.push(up[i]);
-    if (down[i]) out.push(down[i]);
-  }
-  return out;
-}
-
 export function HealthTicker({ ticker }: { ticker: CustomerHealthTicker }) {
-  const items = interleave(
-    ticker.rising.map((e) => ({ ...e, direction: "up" as const })),
-    ticker.falling.map((e) => ({ ...e, direction: "down" as const })),
-  );
+  const items = ticker.items;
 
   if (items.length === 0) {
     return null;
@@ -60,11 +43,7 @@ export function HealthTicker({ ticker }: { ticker: CustomerHealthTicker }) {
           style={{ "--ticker-duration": `${lapSeconds}s` } as React.CSSProperties}
         >
           {track.map((item, index) => (
-            <TickerCell
-              key={index}
-              item={item}
-              aria-hidden={index >= items.length}
-            />
+            <TickerCell key={index} item={item} aria-hidden={index >= items.length} />
           ))}
         </div>
       </div>
@@ -76,7 +55,7 @@ function TickerCell({
   item,
   "aria-hidden": ariaHidden,
 }: {
-  item: TickerItem;
+  item: HealthTickerEntry;
   "aria-hidden"?: boolean;
 }) {
   const up = item.direction === "up";
@@ -92,18 +71,14 @@ function TickerCell({
       <span className="font-display text-3xl font-semibold uppercase tracking-wide">
         {item.name}
       </span>
-      <span className="font-display text-3xl font-bold tabular-nums">
-        {item.score}
-      </span>
+      <span className="font-display text-3xl font-bold tabular-nums">{item.score}</span>
       {item.delta != null ? (
         <span className={`font-display text-2xl font-bold tabular-nums ${tone}`}>
           {item.delta > 0 ? "+" : "−"}
           {Math.abs(item.delta)}
         </span>
       ) : (
-        <span className="text-base uppercase tracking-[0.18em] text-muted">
-          {item.bucket}
-        </span>
+        <span className="text-base uppercase tracking-[0.18em] text-muted">{item.bucket}</span>
       )}
       <span className="pl-7 text-2xl text-line" aria-hidden>
         |

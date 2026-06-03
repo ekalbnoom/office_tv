@@ -15,8 +15,7 @@ import {
 export type { HealthTickerEntry };
 
 export type CustomerHealthTicker = {
-  rising: HealthTickerEntry[];
-  falling: HealthTickerEntry[];
+  items: HealthTickerEntry[];
   mode: TickerMode;
   preview: boolean; // true when the +/- deltas are synthetic (no real history yet)
   error: string | null;
@@ -27,14 +26,13 @@ type EdgeResponse = {
   past: CustomerHealthRow[] | null;
 };
 
-export async function getCustomerHealthTicker(limit = 8): Promise<CustomerHealthTicker> {
+export async function getCustomerHealthTicker(): Promise<CustomerHealthTicker> {
   const url = process.env.HEALTH_TICKER_URL;
   const secret = process.env.HEALTH_TICKER_SECRET;
 
   if (!url || !secret) {
     return {
-      rising: [],
-      falling: [],
+      items: [],
       mode: "rank",
       preview: false,
       error:
@@ -81,14 +79,13 @@ export async function getCustomerHealthTicker(limit = 8): Promise<CustomerHealth
       preview = true;
     }
 
-    const ticker = buildTicker(currentRows, pastRows, limit);
+    const ticker = buildTicker(currentRows, pastRows);
     return { ...ticker, preview, error: null };
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Customer health ticker failed to load.";
     return {
-      rising: [],
-      falling: [],
+      items: [],
       mode: "rank",
       preview: false,
       error: `Customer health ticker failed to load: ${message}`,

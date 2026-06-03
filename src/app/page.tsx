@@ -25,7 +25,7 @@ export default async function Home() {
 
   const metrics = await getDashboardMetrics();
   const generatedAt = new Date(metrics.generatedAt);
-  const healthTicker = await getCustomerHealthTicker(8);
+  const healthTicker = await getCustomerHealthTicker();
   const errors = [...metrics.errors, healthTicker.error].filter(Boolean);
 
   const nowPlaying = await getNowPlaying().catch(() => null);

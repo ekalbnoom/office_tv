@@ -1,16 +1,18 @@
 // Pure ranking logic for the customer-health ticker. No I/O, no "server-only",
 // so it can be unit-tested directly. Given today's rows and (optionally) a past
-// snapshot, it produces the rising/falling lists the ribbon renders.
+// snapshot, it produces the ordered list the ribbon renders.
 //
-// - When a usable past snapshot exists, the ticker shows the biggest MOVERS:
-//   top gainers and top losers by score change (real "trending"). Short sides
-//   are padded with today's healthiest/at-risk so the ribbon never half-empties.
-// - When there's no history yet, it falls back to today's healthiest-vs-at-risk
-//   ranking (mode: "rank"), so the ribbon is never empty.
+// - Churned customers are excluded.
+// - ALL remaining customers are shown (no top/bottom cap).
+// - Ordering: when a past snapshot exists (trend mode), biggest score change
+//   first so the movers are visible the moment the ticker loads; ties and
+//   no-change customers fall back to most-at-risk first. With no history yet
+//   (rank mode), it's ordered most-at-risk first.
 
 import {
   computeAllScores,
   BUCKET_LABEL,
+  type Bucket,
   type CustomerHealthRow,
   type CustomerHealthScore,
 } from "./health-score";
@@ -21,29 +23,42 @@ export type HealthTickerEntry = {
   bucket: string;
   status: string;
   reason: string;
-  delta: number | null; // score change vs. the comparison snapshot; null = not trending / no history
+  delta: number | null; // score change vs. the comparison snapshot; null = no history / no change
+  direction: "up" | "down";
 };
 
 export type TickerMode = "trend" | "rank";
 
 export type RankedTicker = {
-  rising: HealthTickerEntry[];
-  falling: HealthTickerEntry[];
+  items: HealthTickerEntry[];
   mode: TickerMode;
 };
 
 type Scored = { row: CustomerHealthRow; score: CustomerHealthScore };
 
+// Statuses to hide from the wallboard (only active customers belong on it).
+const INACTIVE_STATUSES = new Set(["churned", "paused"]);
+
+function isInactive(row: CustomerHealthRow): boolean {
+  return INACTIVE_STATUSES.has((row.customers?.status ?? "").toLowerCase());
+}
+
+function directionFor(bucket: Bucket, delta: number | null): "up" | "down" {
+  if (delta != null && delta !== 0) return delta > 0 ? "up" : "down";
+  // No movement (or no history): color by health — Top/Healthy up, Watch/AtRisk down.
+  return bucket === "Top" || bucket === "Healthy" ? "up" : "down";
+}
+
 export function buildTicker(
   currentRows: CustomerHealthRow[],
   pastRows: CustomerHealthRow[] | null,
-  limit: number,
 ): RankedTicker {
   const currentScores = computeAllScores(currentRows);
 
   const scored: Scored[] = currentRows
     .map((row) => ({ row, score: currentScores.get(row.customer_id) }))
-    .filter((x): x is Scored => Boolean(x.score && x.row.customers));
+    .filter((x): x is Scored => Boolean(x.score && x.row.customers && x.row.customers.name))
+    .filter((x) => !isInactive(x.row));
 
   const entry = (s: Scored, delta: number | null): HealthTickerEntry => ({
     name: s.row.customers!.name,
@@ -52,70 +67,38 @@ export function buildTicker(
     status: s.row.account_health_status ?? "",
     reason: s.score.reasons[0] ?? "",
     delta,
+    direction: directionFor(s.score.bucket, delta),
   });
 
-  // ── Trend mode: biggest movers vs. the past snapshot ──────────────────────
+  // ── Trend mode: all customers, biggest score change first ─────────────────
   if (pastRows && pastRows.length > 0) {
     const pastScores = computeAllScores(pastRows);
+    const withDelta = scored.map((s) => {
+      const past = pastScores.get(s.row.customer_id);
+      return { s, delta: past ? s.score.score - past.score : null };
+    });
 
-    const movers = scored
-      .map((s) => {
-        const past = pastScores.get(s.row.customer_id);
-        return past ? { s, delta: s.score.score - past.score } : null;
-      })
-      .filter((m): m is { s: Scored; delta: number } => m !== null && m.delta !== 0);
-
-    if (movers.length > 0) {
-      const used = new Set<string>();
-      const take = (list: { s: Scored; delta: number }[]) => {
-        const picked = list.slice(0, limit);
-        picked.forEach((m) => used.add(m.s.row.customer_id));
-        return picked.map((m) => entry(m.s, m.delta));
-      };
-
-      const rising = take(
-        movers.filter((m) => m.delta > 0).sort((a, b) => b.delta - a.delta),
-      );
-      const falling = take(
-        movers.filter((m) => m.delta < 0).sort((a, b) => a.delta - b.delta),
-      );
-
-      // Pad short sides with rank-based picks so the ribbon stays full.
-      pad(rising, "top", limit, scored, used, entry);
-      pad(falling, "bottom", limit, scored, used, entry);
-
-      return { rising, falling, mode: "trend" };
+    if (withDelta.some((x) => x.delta != null && x.delta !== 0)) {
+      withDelta.sort((a, b) => {
+        const ad = Math.abs(a.delta ?? 0);
+        const bd = Math.abs(b.delta ?? 0);
+        if (bd !== ad) return bd - ad; // biggest movement first
+        return a.s.score.score - b.s.score.score; // then most at-risk first
+      });
+      return { items: withDelta.map(({ s, delta }) => entry(s, delta)), mode: "trend" };
     }
   }
 
-  // ── Rank fallback: today's healthiest vs. at-risk ─────────────────────────
-  const byScoreDesc = [...scored].sort((a, b) => b.score.score - a.score.score);
-  const safeLimit = Math.min(limit, Math.floor(byScoreDesc.length / 2));
-  const rising = byScoreDesc.slice(0, safeLimit).map((s) => entry(s, null));
-  const falling = byScoreDesc
-    .slice(byScoreDesc.length - safeLimit)
-    .reverse()
-    .map((s) => entry(s, null));
-
-  return { rising, falling, mode: "rank" };
+  // ── Rank mode (no history yet): stable shuffle ────────────────────────────
+  // No real movement to rank by yet, and a straight score sort reads as a dull
+  // monotonic run. Order by a hash of the customer id instead: a varied mix of
+  // scores/colors that's deterministic, so it doesn't reshuffle on every refresh.
+  scored.sort((a, b) => hashId(a.row.customer_id) - hashId(b.row.customer_id));
+  return { items: scored.map((s) => entry(s, null)), mode: "rank" };
 }
 
-function pad(
-  list: HealthTickerEntry[],
-  side: "top" | "bottom",
-  limit: number,
-  scored: Scored[],
-  used: Set<string>,
-  entry: (s: Scored, delta: number | null) => HealthTickerEntry,
-): void {
-  if (list.length >= limit) return;
-  const pool = [...scored].sort((a, b) =>
-    side === "top" ? b.score.score - a.score.score : a.score.score - b.score.score,
-  );
-  for (const s of pool) {
-    if (list.length >= limit) break;
-    if (used.has(s.row.customer_id)) continue;
-    used.add(s.row.customer_id);
-    list.push(entry(s, null));
-  }
+function hashId(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return h;
 }
