@@ -1,10 +1,16 @@
+import QRCode from "qrcode";
 import { AlertTriangle, CircleDollarSign, Clock, TrendingUp } from "lucide-react";
 import { connection } from "next/server";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { HealthTicker } from "@/components/health-ticker";
+import { MediaBar } from "@/components/media-bar";
+import { SpotifyPlayer } from "@/components/spotify-player";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { YouTubeAudioPlayer } from "@/components/youtube-audio-player";
 import { formatMoney, formatTime } from "@/lib/format";
+import { getCustomerHealthTicker } from "@/lib/customer-health";
 import { getDashboardMetrics } from "@/lib/dashboard-metrics";
+import { getLatestJamLink } from "@/lib/slack-jam";
+import { getNowPlaying, isSpotifyConfigured } from "@/lib/spotify";
 
 export const revalidate = 0;
 
@@ -13,6 +19,20 @@ export default async function Home() {
 
   const metrics = await getDashboardMetrics();
   const generatedAt = new Date(metrics.generatedAt);
+  const healthTicker = await getCustomerHealthTicker(8);
+  const errors = [...metrics.errors, healthTicker.error].filter(Boolean);
+
+  const nowPlaying = await getNowPlaying().catch(() => null);
+  const jam = await getLatestJamLink().catch(() => null);
+  let jamQrDataUrl: string | null = null;
+
+  if (jam) {
+    try {
+      jamQrDataUrl = await QRCode.toDataURL(jam.url, { margin: 1, width: 400 });
+    } catch {
+      jamQrDataUrl = null;
+    }
+  }
 
   return (
     <main className="min-h-screen overflow-hidden bg-background text-foreground">
@@ -44,10 +64,10 @@ export default async function Home() {
           </div>
         </header>
 
-        {metrics.errors.length > 0 ? (
+        {errors.length > 0 ? (
           <div className="mt-6 flex items-center gap-3 border border-danger/50 bg-danger/10 px-4 py-3 text-sm text-foreground">
             <AlertTriangle className="h-5 w-5 flex-none text-danger" aria-hidden />
-            <p>{metrics.errors.join(" ")}</p>
+            <p>{errors.join(" ")}</p>
           </div>
         ) : null}
 
@@ -79,9 +99,20 @@ export default async function Home() {
             />
           </section>
 
+          <HealthTicker ticker={healthTicker} />
+
           <section className="border-t border-line pt-5">
-            <h2 className="sr-only">YouTube audio</h2>
-            <YouTubeAudioPlayer />
+            <h2 className="sr-only">Audio and Jam</h2>
+            <MediaBar
+              nowPlaying={nowPlaying}
+              jamQrDataUrl={jamQrDataUrl}
+              spotifyConfigured={isSpotifyConfigured()}
+            />
+            {/* Mounted once here (outside the MediaBar source swap) so the
+                Web Playback SDK device stays alive across refreshes. */}
+            <div className="mt-4">
+              <SpotifyPlayer />
+            </div>
           </section>
         </div>
       </section>

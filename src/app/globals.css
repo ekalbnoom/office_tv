@@ -59,6 +59,23 @@ input {
   font: inherit;
 }
 
+/* Stock-ticker style marquee. The track holds two identical copies of the
+   items side by side; translating by -50% scrolls exactly one copy width and
+   loops seamlessly. */
+@keyframes ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-ticker {
+  animation: ticker-scroll var(--ticker-duration, 45s) linear infinite;
+  will-change: transform;
+}
+
 ::selection {
   background: var(--signal);
   color: var(--background);
